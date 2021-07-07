@@ -9,13 +9,23 @@ To use it in a jupyter notebook (or other python script):
 from raster_reclass import *
 
 hrupath = '/path/to/original/raster.tif'
-remap_hrupath = '/path/to/new/raster.tif' #if this file doesn't exist, the script will automatically make a new raster
-reptable = pd.read_csv('/path/to/remaptable.csv') # this should be a pandas dataframe with three columns: torep (original hru value), repval (replacement value), 
-												 # and pct (percentage of original hru cells that will be replaced with the replacement value)
-blocksize = 2000 #the size of chunks the script will process the raster with
-logpath = '/path/to/logs' #this is just the directory, NOT the log file itself
 
-reclassraster(hrupath=hrupath, remap_hrupath=remap_hrupath, complete_reptable=reptable, blocksize=blocksize, logpath=logpath)
+#if this file doesn't exist, the script will automatically make a new raster
+remap_hrupath = '/path/to/new/raster.tif' 
+
+# this should be a pandas dataframe with three columns: torep (original hru value),
+# repval (replacement value), and pct (percentage of original hru cells that will
+# be replaced with the replacement value)
+reptable = pd.read_csv('/path/to/remaptable.csv') 
+
+#the size of chunks the script will process the raster with
+blocksize = 2000 
+
+#this is just the directory, NOT the log file itself
+logpath = '/path/to/logs' 
+
+reclassraster(hrupath=hrupath, remap_hrupath=remap_hrupath, complete_reptable=reptable, 
+				blocksize=blocksize, logpath=logpath)
 ```
 
 To use it as a shell command:
