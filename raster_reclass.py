@@ -73,10 +73,14 @@ def setup_logger(logger_name, log_file, level):
     log_setup.setLevel(level)
     log_setup.addHandler(file_handler)
 
-def reclassraster(hrupath, remap_hrupath, complete_reptable, blocksize):
+def reclassraster(hrupath, remap_hrupath, complete_reptable, blocksize, logpath=None):
 
-    if not os.path.exists(remap_hrupath):
-        shutil.copyfile(hrupath, remap_hrupath)
+    if not logpath:
+        ostype = platform.system()
+        if ostype=='Linux':
+            logpath = '/var/log'
+        else:
+            logpath = os.getcwd()
 
     progress_logfile = os.path.join(logpath,'raster_reclass_progress.log')
     error_logfile = os.path.join(logpath,'raster_reclass_errors.log')
@@ -91,6 +95,9 @@ def reclassraster(hrupath, remap_hrupath, complete_reptable, blocksize):
 
     pd.set_option('mode.chained_assignment', None)
 
+    if not os.path.exists(remap_hrupath):
+        shutil.copyfile(hrupath, remap_hrupath)
+        
     numcores = cpu_count()
     inputqueue = queue.Queue()
     outputqueue = queue.Queue()
@@ -285,9 +292,3 @@ class BlockWriter(Thread):
 
 if __name__ == '__main__':
     main()
-else:
-    ostype = platform.system()
-    if ostype=='Linux':
-        logpath = '/var/log'
-    else:
-        logpath = os.getcwd()
