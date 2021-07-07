@@ -1,6 +1,4 @@
 # raster_reclass
-Tool to reclassify raster values according to probabilistic remap table.
-
 This is an improved version of my raster reclassification (peppering) script. 
 
 The underlying algorithm is identical to before. However, the overall architecture is totally different. Now it's a python module, and can be imported or run as a shell command. It's also significantly faster due to improved thread scheduling. 
