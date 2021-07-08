@@ -16,6 +16,10 @@ from rasterio.windows import Window # This function is for I/O on subsets of geo
 from numpy.random import choice
 from multiprocessing import cpu_count
 
+
+
+
+
 def main():
     parser = argparse.ArgumentParser(description='Files necessary for remap process.')
     parser.add_argument('-hp','--hrupath', help='Path to hru geotiff',required=False)
@@ -52,7 +56,7 @@ def main():
     complete_reptable.columns = ['torep','repval','pct']
     # Convert torep column to negative. 
     # This is so that we don't accidentally remap the same HRU twice.
-    complete_reptable['torep'] = complete_reptable.torep * -1
+    complete_reptable.loc[:,'torep'] = complete_reptable.torep * -1
     # There are a lot of HRU replacements that are a tiny fraction (like 1E-17), which we can ignore.
     # This line filters those out.
     complete_reptable = complete_reptable[complete_reptable.pct*100>=1]
@@ -62,7 +66,7 @@ def main():
     # Sorting the table and resetting the index.
     complete_reptable = complete_reptable.sort_values('pct').reset_index(drop=True)
 
-    reclassraster(hrupath=hrupath, remap_hrupath=remap_hrupath, complete_reptable=complete_reptable, blocksize=blocksize)
+    reclassraster(hrupath=hrupath, remap_hrupath=remap_hrupath, complete_reptable=complete_reptable, blocksize=blocksize, logpath=logpath)
 
 
 def setup_logger(logger_name, log_file, level):
@@ -75,26 +79,6 @@ def setup_logger(logger_name, log_file, level):
 
 def reclassraster(hrupath, remap_hrupath, complete_reptable, blocksize, logpath=None):
 
-    if not logpath:
-        ostype = platform.system()
-        if ostype=='Linux':
-            logpath = '/var/log'
-        else:
-            logpath = os.getcwd()
-
-    progress_logfile = os.path.join(logpath,'raster_reclass_progress.log')
-    error_logfile = os.path.join(logpath,'raster_reclass_errors.log')
-
-    setup_logger('progress', progress_logfile, logging.INFO)
-    setup_logger('error', error_logfile, logging.ERROR)
-
-    global errorlog
-    errorlog = logging.getLogger('error')
-    global progresslog
-    progresslog = logging.getLogger('progress')
-
-    pd.set_option('mode.chained_assignment', None)
-
     if not os.path.exists(remap_hrupath):
         shutil.copyfile(hrupath, remap_hrupath)
         
@@ -102,14 +86,14 @@ def reclassraster(hrupath, remap_hrupath, complete_reptable, blocksize, logpath=
     inputqueue = queue.Queue()
     outputqueue = queue.Queue()
 
-    producer = WindowProducer(inputqueue=inputqueue, hrupath=hrupath, blocksize=blocksize)
-    writer = BlockWriter(outputqueue=outputqueue, remap_hrupath=remap_hrupath)
+    producer = WindowProducer(inputqueue=inputqueue, hrupath=hrupath, blocksize=blocksize, logpath=logpath)
+    writer = BlockWriter(outputqueue=outputqueue, remap_hrupath=remap_hrupath,logpath=logpath)
 
     reclasscores = numcores - 2 # Leave 2 cores free: 1 for writing blocks and another so your computer doesn't freeze
     reclasslist = []
     for t in range(reclasscores):
         reclasslist.append(WindowProcessor(inputqueue=inputqueue, outputqueue=outputqueue, hrupath=hrupath,
-                    complete_reptable=complete_reptable))
+                    complete_reptable=complete_reptable, logpath=logpath))
 
     producer.start()
     producer.join()
@@ -129,13 +113,34 @@ def reclassraster(hrupath, remap_hrupath, complete_reptable, blocksize, logpath=
 
     print('Raster reclassification complete.')
 
-class WindowProducer(Thread):
-    def __init__(self, inputqueue, hrupath, blocksize=1000):
+class ReclassThread(Thread):
+    def __init__(self, logpath):
+        if not logpath:
+            ostype = platform.system()
+            if ostype=='Linux':
+                logpath = '/var/log'
+            else:
+                logpath = os.getcwd()
+
+        progress_logfile = os.path.join(logpath,'raster_reclass_progress.log')
+        error_logfile = os.path.join(logpath,'raster_reclass_errors.log')
+
+        setup_logger('progress', progress_logfile, logging.INFO)
+        setup_logger('error', error_logfile, logging.ERROR)
+
+        global errorlog
+        errorlog = logging.getLogger('error')
+        global progresslog
+        progresslog = logging.getLogger('progress')
+
+class WindowProducer(ReclassThread):
+    def __init__(self, inputqueue, hrupath, blocksize=1000, logpath = None):
         Thread.__init__(self)
         self.inputqueue = inputqueue
         self.blocksize = blocksize
         with rio.open(hrupath) as src:
             self.hru_numrows,self.hru_numcols = src.shape
+        super().__init__(logpath)
 
     def run(self):
 
@@ -162,8 +167,8 @@ class WindowProducer(Thread):
 
 
 
-class WindowProcessor(Thread):
-    def __init__(self, inputqueue, outputqueue, complete_reptable, hrupath):
+class WindowProcessor(ReclassThread):
+    def __init__(self, inputqueue, outputqueue, complete_reptable, hrupath, logpath = None):
         Thread.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -176,6 +181,7 @@ class WindowProcessor(Thread):
         self.hrupath = hrupath
         self.nodata = None
         self.out_meta = None
+        super().__init__(logpath)
 
     def run(self):
         while not self.stoprequest.isSet():
@@ -222,14 +228,15 @@ class WindowProcessor(Thread):
             if len(self.reptable)>0:
 
                 row_indices,col_indices=np.where(self.hru_block==val_torep) # Find locations in the block where the current HRU exists.
-                self.reptable['numrep'] = self.reptable['pct']*len(row_indices) # Calculate number of cells to replace with each replacement value.
+                # self.reptable.loc[:,'numrep'] = self.reptable.loc[:,'pct']*len(row_indices) # Calculate number of cells to replace with each replacement value.
                 inds = np.arange(0,len(row_indices)) # Create empty vector to fill later with replacement locations.
 
                 #Iterate through the table of replacement values, replacing the correct
                 # percentage of the HRU with its replacement values.
                 for i,row in self.reptable.iterrows():
                     repval = row.repval
-                    numrep = int(row.numrep)
+                    numrep = int(row.pct*len(row_indices))
+                    # numrep = int(row.numrep)
 
                     inds_torep = choice(inds,numrep,replace=False) # This function randomly selects points in the empty vector (inds),
                                                                    # which will be replaced with the current replacement value.
@@ -264,12 +271,13 @@ class WindowProcessor(Thread):
         self.stoprequest.set()
         super(WindowProcessor, self).join(timeout)
 
-class BlockWriter(Thread):
-    def __init__(self, outputqueue, remap_hrupath):
+class BlockWriter(ReclassThread):
+    def __init__(self, outputqueue, remap_hrupath, logpath = None):
         Thread.__init__(self)
         self.outputqueue = outputqueue
         self.stoprequest = threading.Event()
         self.remap_hrupath = remap_hrupath
+        super().__init__(logpath)
 
     def run(self):
         while not self.stoprequest.isSet():
