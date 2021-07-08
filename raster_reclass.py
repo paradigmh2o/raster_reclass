@@ -60,8 +60,7 @@ def main():
     # There are a lot of HRU replacements that are a tiny fraction (like 1E-17), which we can ignore.
     # This line filters those out.
     complete_reptable = complete_reptable[complete_reptable.pct*100>=1]
-    # There are some remap percentages that exceed 100% because whoever made the remap table did a bad job.
-    # This rounds down to 100%. 
+    # There are some remap percentages that exceed 100%. This rounds down to 100%. 
     complete_reptable.loc[complete_reptable.pct>1,'pct'] = 1
     # Sorting the table and resetting the index.
     complete_reptable = complete_reptable.sort_values('pct').reset_index(drop=True)
