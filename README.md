@@ -3,6 +3,14 @@ This is an improved version of my raster reclassification (peppering) script.
 
 The underlying algorithm is identical to before. However, the overall architecture is totally different. Now it's a python module, and can be imported or run as a shell command. It's also significantly faster due to improved thread scheduling. 
 
+# Required Inputs and Formats
+Two inputs are required:
+1) A baseline raster to be reclassified.
+2) A csv table with the raster cell values to be reclassified, the replacement value, and the percentage of original cell values that will be reclassified.
+
+An example input raster and reclassification table are in the Example_data folder.
+
+# Running
 To use it in a jupyter notebook (or other python script):
 
 ```python
