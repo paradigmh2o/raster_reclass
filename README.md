@@ -43,7 +43,7 @@ python distributed_raster_reclass.py --hrupath "/path/to/original/raster.tif" --
 
 ```
 
-# Packages
+# Dependencies
 pepper_by_sws working with:
 - numpy=1.20.1
 - pandas=1.2.3
